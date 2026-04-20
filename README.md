@@ -2,8 +2,10 @@
 
 > A modern, iOS-inspired web interface for the amazing [Build Your Own X](https://github.com/codecrafters-io/build-your-own-x) repository.
 
-[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://apus3404-oss.github.io/build-your-own-x-web)
-[![Original Repo](https://img.shields.io/badge/original-codecrafters--io-blue)](https://github.com/codecrafters-io/build-your-own-x)
+[![Live Demo](https://img.shields.io/badge/demo-live-success?style=for-the-badge)](https://apus3404-oss.github.io/build-your-own-x-web)
+[![Original Repo](https://img.shields.io/badge/original-codecrafters--io-blue?style=for-the-badge)](https://github.com/codecrafters-io/build-your-own-x)
+[![GitHub Stars](https://img.shields.io/github/stars/apus3404-oss/build-your-own-x-web?style=for-the-badge)](https://github.com/apus3404-oss/build-your-own-x-web/stargazers)
+[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
 ## 🎯 What is this?
 
@@ -22,7 +24,9 @@ This project transforms the popular [Build Your Own X](https://github.com/codecr
 
 ### Option 1: GitHub Pages (Recommended)
 
-Simply visit the live demo: [https://apus3404-oss.github.io/build-your-own-x-web](https://apus3404-oss.github.io/build-your-own-x-web)
+Simply visit the live demo: **[https://apus3404-oss.github.io/build-your-own-x-web](https://apus3404-oss.github.io/build-your-own-x-web)**
+
+No installation needed - just click and start exploring!
 
 ### Option 2: Run Locally
 
