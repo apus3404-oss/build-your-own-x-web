@@ -678,35 +678,29 @@ body {
     transition: all 0.2s var(--transition-smooth);
 }
 
-/* Share Dropdown */
-.share-dropdown {
-    position: relative;
-}
+/* Share Dropdown - Removed, using popup instead */
 
-.share-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
+/* Share Menu Popup */
+.share-menu-popup {
+    position: fixed;
     background: var(--color-surface-solid);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
     padding: 8px;
     min-width: 160px;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s var(--transition-spring);
-    z-index: 100;
+    z-index: 1000;
+    animation: popupAppear 0.2s var(--transition-spring);
 }
 
-.share-dropdown.active .share-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
+@keyframes popupAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-10px);
+    }
 }
 
-.share-menu button {
+.share-menu-popup button {
     width: 100%;
     display: flex;
     align-items: center;
@@ -724,12 +718,12 @@ body {
     text-align: left;
 }
 
-.share-menu button:hover {
+.share-menu-popup button:hover {
     background: var(--color-surface);
     color: var(--color-accent);
 }
 
-.share-menu button svg {
+.share-menu-popup button svg {
     flex-shrink: 0;
 }
 
@@ -920,6 +914,11 @@ body {
         grid-template-columns: 1fr 1fr;
         gap: 16px;
     }
+
+    .theme-toggle {
+        top: 10px;
+        right: 10px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -938,6 +937,14 @@ body {
     .tutorial-card {
         flex-direction: column;
         gap: 12px;
+        padding-right: 20px;
+    }
+
+    .tutorial-actions {
+        position: static;
+        transform: none;
+        justify-content: flex-end;
+        margin-top: 12px;
     }
 
     .tutorial-language {
@@ -946,5 +953,20 @@ body {
 
     .stats-card {
         grid-template-columns: repeat(3, 1fr);
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Performance: Reduce animations on low-end devices */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 }

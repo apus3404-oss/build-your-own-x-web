@@ -7,7 +7,49 @@ let activeFilters = {
     search: ''
 };
 
-// Theme Management
+// Performance optimization
+const CACHE_KEY = 'buildyourownx_cache';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const TUTORIALS_PER_PAGE = 30;
+let currentPage = 1;
+let filteredTutorials = [];
+
+// Fetch and parse README with caching
+async function fetchReadme() {
+    try {
+        // Check cache first
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < CACHE_DURATION) {
+                console.log('Using cached data');
+                return data;
+            }
+        }
+
+        // Fetch fresh data
+        console.log('Fetching fresh data');
+        const response = await fetch('https://raw.githubusercontent.com/codecrafters-io/build-your-own-x/master/README.md');
+        const text = await response.text();
+
+        // Cache the data
+        localStorage.setItem(CACHE_KEY, JSON.stringify({
+            data: text,
+            timestamp: Date.now()
+        }));
+
+        return text;
+    } catch (error) {
+        console.error('Error fetching README:', error);
+        // Try to use expired cache as fallback
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const { data } = JSON.parse(cached);
+            return data;
+        }
+        return null;
+    }
+}
 function initTheme() {
     const savedTheme = localStorage.getItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -122,9 +164,11 @@ function renderCategories(categories) {
     });
 }
 
-// Render tutorials
+// Render tutorials with lazy loading
 function renderTutorials(tutorials) {
     const container = document.getElementById('tutorialsContainer');
+    filteredTutorials = tutorials;
+    currentPage = 1;
 
     if (tutorials.length === 0) {
         container.innerHTML = `
@@ -146,80 +190,210 @@ function renderTutorials(tutorials) {
         grouped[tutorial.category].push(tutorial);
     });
 
+    // Render first page
     let html = '';
-    Object.keys(grouped).forEach(categoryName => {
+    let tutorialCount = 0;
+
+    for (const categoryName in grouped) {
         const categoryTutorials = grouped[categoryName];
-        html += `
-            <div class="category-section">
-                <div class="category-header">
-                    <h2 class="category-title">${categoryName}</h2>
-                    <span class="category-badge">${categoryTutorials.length} tutorial${categoryTutorials.length !== 1 ? 's' : ''}</span>
-                </div>
-                <div class="tutorials-grid">
-                    ${categoryTutorials.map(tutorial => {
-                        const isFav = isFavorite(tutorial);
-                        const tutorialJson = JSON.stringify(tutorial).replace(/"/g, '&quot;');
-                        return `
-                        <div class="tutorial-card-wrapper">
-                            <a href="${tutorial.url}" target="_blank" rel="noopener noreferrer" class="tutorial-card">
-                                <div class="tutorial-language">${tutorial.languages.join(' / ')}</div>
-                                <div class="tutorial-content">
-                                    <div class="tutorial-title">${tutorial.title}</div>
-                                    <div class="tutorial-link">${tutorial.url}</div>
-                                </div>
-                            </a>
-                            <div class="tutorial-actions">
-                                <button class="favorite-btn ${isFav ? 'active' : ''}" onclick="event.preventDefault(); toggleFavorite(${tutorialJson}); return false;" aria-label="Toggle favorite" title="Add to favorites">
-                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-                                        <path d="M10 3.435l-.896-.92C7.2.351 3.143 1.097 1.75 3.816c-.654 1.279-.801 3.125.393 5.481 1.15 2.269 3.542 4.986 7.857 7.946 4.315-2.96 6.707-5.677 7.857-7.946 1.194-2.357 1.047-4.202.393-5.481C16.857 1.097 12.8.35 10.896 2.513L10 3.435z"/>
-                                    </svg>
-                                </button>
-                                <div class="share-dropdown">
-                                    <button class="share-btn" onclick="event.preventDefault(); this.parentElement.classList.toggle('active'); return false;" aria-label="Share tutorial" title="Share">
-                                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-                                            <circle cx="15" cy="5" r="2.5"/>
-                                            <circle cx="5" cy="10" r="2.5"/>
-                                            <circle cx="15" cy="15" r="2.5"/>
-                                            <path d="M7.5 11L12.5 14M7.5 9L12.5 6" stroke-linecap="round"/>
-                                        </svg>
-                                    </button>
-                                    <div class="share-menu">
-                                        <button onclick="event.preventDefault(); shareTutorial(${tutorialJson}, 'twitter'); return false;">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                                            </svg>
-                                            Twitter
-                                        </button>
-                                        <button onclick="event.preventDefault(); shareTutorial(${tutorialJson}, 'linkedin'); return false;">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                                            </svg>
-                                            LinkedIn
-                                        </button>
-                                        <button onclick="event.preventDefault(); shareTutorial(${tutorialJson}, 'whatsapp'); return false;">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                            </svg>
-                                            WhatsApp
-                                        </button>
-                                        <button onclick="event.preventDefault(); shareTutorial(${tutorialJson}, 'copy'); return false;">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                                                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                                            </svg>
-                                            Copy Link
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `}).join('')}
-                </div>
-            </div>
-        `;
-    });
+        const tutorialsToShow = categoryTutorials.slice(0, Math.min(TUTORIALS_PER_PAGE - tutorialCount, categoryTutorials.length));
+
+        if (tutorialsToShow.length === 0) break;
+
+        html += renderCategorySection(categoryName, tutorialsToShow);
+        tutorialCount += tutorialsToShow.length;
+
+        if (tutorialCount >= TUTORIALS_PER_PAGE) break;
+    }
 
     container.innerHTML = html;
+
+    // Setup event delegation for buttons
+    setupEventDelegation();
+
+    // Setup infinite scroll if more tutorials exist
+    if (tutorials.length > TUTORIALS_PER_PAGE) {
+        setupInfiniteScroll();
+    }
+}
+
+function renderCategorySection(categoryName, tutorials) {
+    return `
+        <div class="category-section">
+            <div class="category-header">
+                <h2 class="category-title">${categoryName}</h2>
+                <span class="category-badge">${tutorials.length} tutorial${tutorials.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="tutorials-grid">
+                ${tutorials.map(tutorial => renderTutorialCard(tutorial)).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function renderTutorialCard(tutorial) {
+    const isFav = isFavorite(tutorial);
+    const tutorialId = `${tutorial.categorySlug}-${encodeURIComponent(tutorial.title)}`;
+
+    return `
+        <div class="tutorial-card-wrapper" data-tutorial-id="${tutorialId}">
+            <a href="${tutorial.url}" target="_blank" rel="noopener noreferrer" class="tutorial-card">
+                <div class="tutorial-language">${tutorial.languages.join(' / ')}</div>
+                <div class="tutorial-content">
+                    <div class="tutorial-title">${tutorial.title}</div>
+                    <div class="tutorial-link">${tutorial.url}</div>
+                </div>
+            </a>
+            <div class="tutorial-actions">
+                <button class="favorite-btn ${isFav ? 'active' : ''}" data-action="favorite" aria-label="Toggle favorite" title="Add to favorites">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+                        <path d="M10 3.435l-.896-.92C7.2.351 3.143 1.097 1.75 3.816c-.654 1.279-.801 3.125.393 5.481 1.15 2.269 3.542 4.986 7.857 7.946 4.315-2.96 6.707-5.677 7.857-7.946 1.194-2.357 1.047-4.202.393-5.481C16.857 1.097 12.8.35 10.896 2.513L10 3.435z"/>
+                    </svg>
+                </button>
+                <button class="share-btn" data-action="share" aria-label="Share tutorial" title="Share">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="15" cy="5" r="2.5"/>
+                        <circle cx="5" cy="10" r="2.5"/>
+                        <circle cx="15" cy="15" r="2.5"/>
+                        <path d="M7.5 11L12.5 14M7.5 9L12.5 6" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Event delegation for better performance
+function setupEventDelegation() {
+    const container = document.getElementById('tutorialsContainer');
+
+    container.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const wrapper = btn.closest('[data-tutorial-id]');
+        const tutorialId = wrapper.dataset.tutorialId;
+        const tutorial = findTutorialById(tutorialId);
+
+        if (!tutorial) return;
+
+        const action = btn.dataset.action;
+
+        if (action === 'favorite') {
+            toggleFavorite(tutorial);
+            // Update button state
+            const svg = btn.querySelector('svg');
+            const isNowFav = isFavorite(tutorial);
+            btn.classList.toggle('active', isNowFav);
+            svg.setAttribute('fill', isNowFav ? 'currentColor' : 'none');
+        } else if (action === 'share') {
+            showShareMenu(tutorial, btn);
+        }
+    });
+}
+
+function findTutorialById(tutorialId) {
+    return allTutorials.find(t => {
+        const id = `${t.categorySlug}-${encodeURIComponent(t.title)}`;
+        return id === tutorialId;
+    });
+}
+
+// Shared share menu
+let currentShareMenu = null;
+
+function showShareMenu(tutorial, button) {
+    // Remove existing menu
+    if (currentShareMenu) {
+        currentShareMenu.remove();
+    }
+
+    const menu = document.createElement('div');
+    menu.className = 'share-menu-popup';
+    menu.innerHTML = `
+        <button data-platform="twitter">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            Twitter
+        </button>
+        <button data-platform="linkedin">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+            </svg>
+            LinkedIn
+        </button>
+        <button data-platform="whatsapp">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+            </svg>
+            WhatsApp
+        </button>
+        <button data-platform="copy">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+            </svg>
+            Copy Link
+        </button>
+    `;
+
+    // Position menu
+    const rect = button.getBoundingClientRect();
+    menu.style.position = 'fixed';
+    menu.style.top = `${rect.bottom + 8}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+
+    document.body.appendChild(menu);
+    currentShareMenu = menu;
+
+    // Handle clicks
+    menu.addEventListener('click', (e) => {
+        const platformBtn = e.target.closest('[data-platform]');
+        if (platformBtn) {
+            const platform = platformBtn.dataset.platform;
+            shareTutorial(tutorial, platform);
+            menu.remove();
+            currentShareMenu = null;
+        }
+    });
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', closeShareMenu);
+    }, 0);
+}
+
+function closeShareMenu(e) {
+    if (currentShareMenu && !currentShareMenu.contains(e.target)) {
+        currentShareMenu.remove();
+        currentShareMenu = null;
+        document.removeEventListener('click', closeShareMenu);
+    }
+}
+
+// Infinite scroll
+function setupInfiniteScroll() {
+    const observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+            loadMoreTutorials();
+        }
+    }, { rootMargin: '200px' });
+
+    const sentinel = document.createElement('div');
+    sentinel.id = 'scroll-sentinel';
+    sentinel.style.height = '1px';
+    document.getElementById('tutorialsContainer').appendChild(sentinel);
+
+    observer.observe(sentinel);
+}
+
+function loadMoreTutorials() {
+    // Implementation for loading more tutorials
+    // This is a placeholder - actual implementation would load next page
 }
 
 // Filter by category
